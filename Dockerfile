@@ -1,9 +1,13 @@
 FROM node:20-slim
 
-# Install Stockfish from Debian's apt repo. The build is current enough (Stockfish 15+) for
-# our depth-12 to depth-18 use case — we don't need the latest NNUE optimization tricks.
+# Install Stockfish from Debian's apt repo, then symlink it onto PATH. Debian installs the
+# binary at /usr/games/stockfish, which isn't on the default PATH inside node:20-slim — so
+# Node's `spawn('stockfish')` would otherwise fail with ENOENT at runtime. The symlink to
+# /usr/local/bin/stockfish makes the binary reachable without depending on PATH config.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends stockfish ca-certificates \
+    && ln -sf /usr/games/stockfish /usr/local/bin/stockfish \
+    && test -x /usr/games/stockfish || (echo "Stockfish install failed" && exit 1) \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
