@@ -1,0 +1,20 @@
+# Render Blueprint — one-click deploy. After pushing this repo to GitHub, in the Render
+# dashboard click "New > Blueprint" and point it at this repo. Render reads render.yaml and
+# provisions the service with the settings below.
+#
+# Free tier sleeps after 15 min idle. The /healthz endpoint exists specifically so you can
+# wire UptimeRobot (or any cron-style pinger) to hit it every 5 min and keep the dyno warm.
+services:
+  - type: web
+    name: chess-engine-proxy
+    runtime: docker
+    plan: free
+    region: oregon
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Stockfish is on PATH after the Dockerfile's apt install, so STOCKFISH_PATH default
+      # ("stockfish") works. Override only if you bake a custom binary.
+      - key: ENGINE_TIMEOUT_MS
+        value: "60000"

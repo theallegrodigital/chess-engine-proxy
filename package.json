@@ -1,0 +1,19 @@
+{
+  "name": "chess-engine-proxy",
+  "version": "1.0.0",
+  "description": "HTTP wrapper around Stockfish, matching chess-api.com's request/response shape so the Chess Engine for Stockfish Android app can swap endpoints without code changes.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "chess.js": "^1.0.0-beta.8",
+    "express": "^4.21.1"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
