@@ -79,6 +79,13 @@ app.post('/v1', async (req, res) => {
       ? round(50 + 50 * Math.tanh(evalForResponse / 2), 2)
       : (result.mate !== undefined ? (result.mate > 0 ? 99 : 1) : null);
 
+    // The UCI principal variation starts at the *current* position — so pv[0] is the
+    // bestmove itself. chess-api.com strips that prefix from continuationArr so consumers
+    // can render "best move X, then continuation Y Z W..." without duplicating X. Match
+    // that convention so the Android paywall's chip row doesn't show the bestmove twice.
+    const pv = result.pv ?? [];
+    const continuationArr = pv.length > 0 && pv[0] === result.bestmove ? pv.slice(1) : pv;
+
     res.json({
       type: 'bestmove',
       move: result.bestmove,
@@ -88,7 +95,7 @@ app.post('/v1', async (req, res) => {
       eval: evalForResponse,
       winChance,
       mate: result.mate ?? null,
-      continuationArr: result.pv ?? [],
+      continuationArr,
       text: describe(san, evalForResponse, result.mate, depth),
     });
   } catch (e) {
