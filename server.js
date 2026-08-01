@@ -5,6 +5,7 @@
 // Endpoints:
 //   GET  /            - status probe (returns JSON {status:"ok"})
 //   GET  /healthz     - liveness probe for UptimeRobot / load balancer
+//   GET  /config      - dedicated remote config for the Android app (non-secret tuning knobs)
 //   POST /v1          - analyze a FEN, return {move, from, to, san, eval, winChance,
 //                        continuationArr, text} on success or {type:"error", error, text} on failure
 //
@@ -13,6 +14,9 @@
 //   STOCKFISH_PATH  - path to the Stockfish binary (default "stockfish", on PATH)
 //   ENGINE_TIMEOUT_MS - hard kill after this many ms if Stockfish hasn't returned bestmove
 //                       (default 60000 — matches the Android app's per-request timeout)
+//   Remote-config knobs served by GET /config (all optional, fall back to the defaults below):
+//   PHOTO_TIMEOUT_MS, FREE_CREDITS_COUNT, ANALYSIS_DEPTH, ANALYSIS_MAX_THINKING_TIME,
+//   ANALYSIS_VARIANTS
 
 import express from 'express';
 import { spawn } from 'node:child_process';
@@ -31,6 +35,26 @@ app.get('/', (_req, res) => {
 app.get('/healthz', (_req, res) => {
   // Synchronous, no Stockfish spawn — meant for UptimeRobot to keep the Render free dyno warm.
   res.status(200).type('text/plain').send('ok');
+});
+
+// Dedicated remote config for the Chess Engine for Stockfish app. The app fetches this once per
+// launch (its REMOTE_CONFIG_URL) to tune non-secret behavior without an app rebuild. Base URLs
+// and proxy tokens are NOT here — those live in the separate bootstrap server. Each value is
+// env-overridable so it can be changed from the Render dashboard without a code deploy.
+const APP_CONFIG = {
+  photoAnalyzer: {
+    timeoutMs: intFromEnv('PHOTO_TIMEOUT_MS', 30_000),
+  },
+  freeCreditsCount: intFromEnv('FREE_CREDITS_COUNT', 3),
+  analysisDefaults: {
+    depth: intFromEnv('ANALYSIS_DEPTH', 18),
+    maxThinkingTime: intFromEnv('ANALYSIS_MAX_THINKING_TIME', 100),
+    variants: intFromEnv('ANALYSIS_VARIANTS', 1),
+  },
+};
+
+app.get('/config', (_req, res) => {
+  res.json(APP_CONFIG);
 });
 
 app.post('/v1', async (req, res) => {
@@ -177,6 +201,12 @@ function analyze(fen, depth, maxThinkingTime) {
       finish(new Error(`Failed to write UCI commands: ${e.message}`));
     }
   });
+}
+
+// Parse an integer env var, falling back to [fallback] when unset or not a finite number.
+function intFromEnv(name, fallback) {
+  const n = Number(process.env[name]);
+  return Number.isFinite(n) ? Math.trunc(n) : fallback;
 }
 
 function clamp(value, min, max) {
