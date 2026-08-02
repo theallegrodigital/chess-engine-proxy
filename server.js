@@ -15,8 +15,8 @@
 //   ENGINE_TIMEOUT_MS - hard kill after this many ms if Stockfish hasn't returned bestmove
 //                       (default 60000 — matches the Android app's per-request timeout)
 //   Remote-config knobs served by GET /config (all optional, fall back to the defaults below):
-//   PHOTO_TIMEOUT_MS, FREE_CREDITS_COUNT, ANALYSIS_DEPTH, ANALYSIS_MAX_THINKING_TIME,
-//   ANALYSIS_VARIANTS
+//   PHOTO_TIMEOUT_MS, PHOTO_MODEL, FREE_CREDITS_COUNT, ANALYSIS_DEPTH,
+//   ANALYSIS_MAX_THINKING_TIME, ANALYSIS_VARIANTS
 
 import express from 'express';
 import { spawn } from 'node:child_process';
@@ -44,6 +44,9 @@ app.get('/healthz', (_req, res) => {
 const APP_CONFIG = {
   photoAnalyzer: {
     timeoutMs: intFromEnv('PHOTO_TIMEOUT_MS', 30_000),
+    // OpenAI vision model for photo→FEN. Swap without an app rebuild — but the model must be
+    // allow-listed on the OpenAI proxy and available to the account, or requests 403/404.
+    model: process.env.PHOTO_MODEL || 'gpt-4o',
   },
   freeCreditsCount: intFromEnv('FREE_CREDITS_COUNT', 3),
   analysisDefaults: {
