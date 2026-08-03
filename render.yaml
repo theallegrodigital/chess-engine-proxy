@@ -18,3 +18,24 @@ services:
       # ("stockfish") works. Override only if you bake a custom binary.
       - key: ENGINE_TIMEOUT_MS
         value: "60000"
+      # Base URL of the chess-fen-service below (e.g. its onrender.com URL).
+      # Set in the dashboard after the first deploy; while unset, POST /fen
+      # returns 503 and the apps fall back to their OpenAI vision path.
+      - key: FEN_SERVICE_URL
+        sync: false
+
+  # Board-photo -> FEN recognition (tsoj/Chess_diagram_to_FEN CNN wrapped in
+  # FastAPI). Reached only through the Node service's POST /fen forwarder so
+  # the apps keep one base URL.
+  #
+  # RAM: torch + the five models need well over 512MB at inference — the free
+  # tier WILL OOM. Use an instance with >=2GB RAM. Build is slow (~3GB image:
+  # CPU torch + 900MB weights baked in) but cold requests then need no
+  # downloads.
+  - type: web
+    name: chess-fen-service
+    runtime: docker
+    rootDir: fen-service
+    plan: standard
+    region: oregon
+    healthCheckPath: /healthz

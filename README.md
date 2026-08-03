@@ -62,6 +62,54 @@ Analyze a position.
 
 Possible `error` codes: `MISSING_FEN`, `INVALID_FEN_VALIDATION_ERROR`, `NO_MOVE`, `ENGINE_ERROR`.
 
+### `POST /fen`
+Board-photo → FEN recognition. Forwards to the Python CNN service in
+[`fen-service/`](./fen-service) (set `FEN_SERVICE_URL`; while unset this returns 503 and the
+apps fall back to their OpenAI vision path).
+
+**Request body**: `{"image": "<base64 JPEG/PNG>"}` (max ~12MB decoded).
+
+**Success response**:
+```json
+{
+  "fen": "1k6/1pp5/p7/2PP1Q1K/7P/P7/6rr/8 w - - 0 1",
+  "placementAsSeen": "8/rr6/7P/P7/K1Q1PP2/7p/5pp1/6k1",
+  "boardIsFlipped": true
+}
+```
+
+`placementAsSeen` is the position exactly as pictured (no orientation correction);
+`boardIsFlipped` is the model's statistical guess at whether the diagram is from black's side.
+The iOS app decides orientation itself by OCR-ing the printed board coordinates (definitive
+when present) and rotating `placementAsSeen` accordingly; `fen` has the server's best guess
+applied for simple clients. Errors: `422 {"error": "NO_BOARD" | "BAD_IMAGE" | "IMAGE_TOO_LARGE"}`,
+`503/502` when the recognition service is unset/down.
+
+The recognizer is [tsoj/Chess_diagram_to_FEN](https://github.com/tsoj/Chess_diagram_to_FEN)
+(MIT), measured at 95% exact-board accuracy / 0.38 wrong squares per board on its real-world
+test set, ~1s per image on CPU. **RAM:** the fen-service needs well over 512MB — deploy it on
+a ≥2GB instance (see `render.yaml`).
+
+## Deploy with Coolify (docker-compose)
+
+The repo ships a [`docker-compose.yaml`](./docker-compose.yaml) that runs both the Node proxy
+and the FEN recognition service as one Coolify resource:
+
+1. Coolify → **New Resource → Docker Compose**, point it at this repo (it reads
+   `docker-compose.yaml`).
+2. Assign the public domain (e.g. `chessengine.api.ardasen.com`) to the **proxy** service,
+   port 3000. `fen-service` needs **no domain** — the proxy reaches it internally as
+   `http://fen-service:8000` (already wired via `FEN_SERVICE_URL` in the compose file).
+3. Deploy. The first build is slow: the fen-service image bakes in CPU torch and ~900MB of
+   model weights, and runs a warmup inference that fails the build if the model is broken.
+   Later deploys reuse cached layers unless `fen-service/` changes.
+4. Verify: `GET /healthz` → `ok`, then `POST /fen` with `{"image": "<base64>"}` of a board
+   screenshot → FEN JSON.
+
+Sizing: ~1–1.5GB RAM for a fen-service inference, a few hundred MB for Node+Stockfish — a
+4 vCPU / 8GB box has ample headroom. If you migrate an existing single-Dockerfile Coolify
+resource, create the compose resource first, verify it, then move the domain over.
+
 ## Deploy to Render
 
 1. Push this repo to GitHub.

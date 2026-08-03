@@ -24,8 +24,35 @@ import { Chess } from 'chess.js';
 
 const ENGINE_BIN = process.env.STOCKFISH_PATH || 'stockfish';
 const ENGINE_TIMEOUT_MS = Number(process.env.ENGINE_TIMEOUT_MS) || 60_000;
+const FEN_SERVICE_URL = process.env.FEN_SERVICE_URL || '';
 
 const app = express();
+
+// Board-photo FEN recognition, forwarded to the Python CNN service
+// (fen-service/). Mounted BEFORE the global JSON parser: photos exceed its
+// 256kb limit, so this route parses its own body. Returns non-200 when the
+// service is unset or down — the apps then fall back to their OpenAI vision
+// path, so this endpoint failing never breaks imports outright.
+app.post('/fen', express.json({ limit: '16mb' }), async (req, res) => {
+  if (!FEN_SERVICE_URL) {
+    return res.status(503).json({ error: 'FEN_SERVICE_NOT_CONFIGURED' });
+  }
+  try {
+    const upstream = await fetch(`${FEN_SERVICE_URL.replace(/\/$/, '')}/fen`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body || {}),
+      // Generous: a sleeping free-tier dyno cold-starts slower than it infers.
+      signal: AbortSignal.timeout(90_000),
+    });
+    const body = await upstream.text();
+    res.status(upstream.status).type('application/json').send(body);
+  } catch (e) {
+    console.error('FEN forward failed:', e?.message || e);
+    res.status(502).json({ error: 'FEN_SERVICE_UNAVAILABLE' });
+  }
+});
+
 app.use(express.json({ limit: '256kb' }));
 
 app.get('/', (_req, res) => {
