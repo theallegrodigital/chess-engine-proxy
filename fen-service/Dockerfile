@@ -11,10 +11,12 @@
 # ~1-1.5GB RAM at inference — the compose file caps it at 2GB.
 FROM python:3.11-slim
 
-# libcairo2: cairosvg (imported by the model code). git/curl/unzip: fetch the
-# model repo and weights at build time.
+# libcairo2: cairosvg (imported by the model code). libgl1 + libglib2.0-0:
+# the lockfile pins regular opencv-python (not headless), whose `import cv2`
+# needs libGL.so.1 on Linux. git/curl/unzip: fetch the model repo and weights
+# at build time.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git ca-certificates curl unzip libcairo2 libglib2.0-0 \
+    git ca-certificates curl unzip libcairo2 libglib2.0-0 libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
