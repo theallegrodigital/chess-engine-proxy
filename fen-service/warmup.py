@@ -1,22 +1,43 @@
 """Build-time warmup: forces the torchvision backbone downloads into the
 image and fails the Docker build if a test inference doesn't return a FEN —
-so a broken model setup is caught at build time, not by the first user."""
+so a broken model setup is caught at build time, not by the first user.
+Prints versions and a full traceback so build-log failures are diagnosable."""
 import os
 import sys
+import traceback
 
-sys.path.insert(0, os.environ.get("CDTF_DIR", "/app/Chess_diagram_to_FEN"))
+CDTF_DIR = os.environ.get("CDTF_DIR", "/app/Chess_diagram_to_FEN")
+sys.path.insert(0, CDTF_DIR)
 
-from PIL import Image
+try:
+    import numpy
+    import PIL
+    import torch
+    import torchvision
 
-from chess_diagram_to_fen import get_fen
+    print(
+        f"warmup env: python {sys.version.split()[0]}, torch {torch.__version__}, "
+        f"torchvision {torchvision.__version__}, numpy {numpy.__version__}, "
+        f"pillow {PIL.__version__}",
+        flush=True,
+    )
 
-TEST_IMAGE = os.path.join(
-    os.environ.get("CDTF_DIR", "/app/Chess_diagram_to_FEN"),
-    "resources/test_images/real_use_cases_chess",
-)
+    from PIL import Image
 
-name = sorted(os.listdir(TEST_IMAGE))[2]
-img = Image.open(os.path.join(TEST_IMAGE, name))
-result = get_fen(img, game="chess", auto_rotate_image=True, auto_rotate_board=True)
-assert result is not None and result.fen, f"warmup inference failed on {name}"
-print(f"warmup ok: {name} -> {result.fen}")
+    from chess_diagram_to_fen import get_fen
+
+    test_dir = os.path.join(CDTF_DIR, "resources/test_images/real_use_cases_chess")
+    name = sorted(os.listdir(test_dir))[2]
+    print(f"warmup image: {name}", flush=True)
+
+    result = get_fen(
+        Image.open(os.path.join(test_dir, name)),
+        game="chess",
+        auto_rotate_image=True,
+        auto_rotate_board=True,
+    )
+    assert result is not None and result.fen, "warmup inference produced no FEN"
+    print(f"warmup ok: {result.fen}", flush=True)
+except Exception:
+    traceback.print_exc()
+    sys.exit(1)
