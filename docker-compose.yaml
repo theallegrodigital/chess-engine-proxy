@@ -18,6 +18,10 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - FEN_SERVICE_URL=http://fen-service:8000
+      # Browser origins allowed to call POST /v1. The apps don't send an Origin header and
+      # are unaffected by this list; anything not listed here is refused before the engine.
+      # Both the apex and www must be listed — they are distinct origins to a browser.
+      - WEB_ORIGINS=https://chessengineonline.com,https://www.chessengineonline.com
     expose:
       - "3000"
     depends_on:

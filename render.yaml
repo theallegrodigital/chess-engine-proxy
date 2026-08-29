@@ -23,6 +23,11 @@ services:
       # returns 503 and the apps fall back to their OpenAI vision path.
       - key: FEN_SERVICE_URL
         sync: false
+      # Browser origins allowed to call POST /v1, comma-separated. The apps send no Origin
+      # header and are unaffected; unlisted browser origins are refused before the engine.
+      # Apex and www are distinct origins to a browser, so both are listed.
+      - key: WEB_ORIGINS
+        value: "https://chessengineonline.com,https://www.chessengineonline.com"
 
   # Board-photo -> FEN recognition (tsoj/Chess_diagram_to_FEN CNN wrapped in
   # FastAPI). Reached only through the Node service's POST /fen forwarder so

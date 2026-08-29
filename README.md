@@ -145,6 +145,44 @@ curl -X POST http://localhost:3000/v1 \
 | `PORT` | 3000 | Listen port. Render sets this automatically. |
 | `STOCKFISH_PATH` | `stockfish` | Path to the engine binary. Override only if Stockfish is somewhere unusual. |
 | `ENGINE_TIMEOUT_MS` | 60000 | Hard timeout after which we SIGTERM Stockfish and 500 the request. Matches the Android app's per-request timeout. |
+| `FEN_SERVICE_URL` | *(unset)* | Base URL of the board-photo recognition service. While unset, `POST /fen` returns 503 and the apps fall back to their OpenAI vision path. |
+| `WEB_ORIGINS` | *(empty)* | Comma-separated browser origins allowed to call `POST /v1`. Empty means no browser may call it at all. Apex and `www.` are distinct origins — list both. |
+| `WEB_MAX_DEPTH` | 16 | Search-depth ceiling for browser traffic. Apps keep the full 20. |
+| `WEB_MAX_THINKING_TIME` | 3000 | `movetime` ceiling in ms for browser traffic. This, not the depth cap, is what actually bounds engine CPU. Apps keep 30000. |
+| `WEB_RATE_MAX` | 30 | Requests per IP per window, browsers only. |
+| `WEB_RATE_WINDOW_MS` | 60000 | Length of that window. |
+| `MAX_CONCURRENT_ANALYSES` | 2 | Stockfish processes allowed to run at once. |
+| `MAX_QUEUE` | 20 | Requests allowed to wait for a slot before the server sheds with 503 `BUSY`. |
+| `CACHE_MAX` | 5000 | Analysed positions kept in memory (LRU). |
+
+## Serving the apps and the website from one box
+
+Every `/v1` request spawns a Stockfish process, so on a small instance CPU and RAM are the
+scarce resource and an indexed public site is an unbounded source of load. Four guards keep
+website traffic from turning into an app outage:
+
+1. **Position cache** — chess traffic is enormously repetitive, and a hit spawns nothing. It
+   is checked *before* the queue, so a cached position never waits for a slot.
+2. **Concurrency gate** — at most `MAX_CONCURRENT_ANALYSES` engines run; the rest queue, and
+   past `MAX_QUEUE` the server sheds with 503 rather than falling over.
+3. **CORS allowlist** — only `WEB_ORIGINS` get CORS headers; other browser origins are refused
+   before reaching the engine.
+4. **Per-IP rate limit and lower ceilings for browsers**, with `POST /fen` refused outright —
+   photo import is what the apps charge credits for, and the CNN service costs far more per
+   call than the engine.
+
+Browsers send `Origin` on a cross-origin POST and the native apps do not; that single header
+is what tells the two callers apart. **No `Origin` means no rate limit, no CORS check, and the
+full depth-20 ceiling, so app behaviour is completely unchanged.** The header is trivially
+spoofable, which is fine — these guards bound CPU, they do not authenticate anyone.
+
+`GET /healthz` reports `active`, `queued` and `cached` so a monitor can warn before the queue
+starts shedding.
+
+> One caveat worth stating plainly: this is still a single instance shared with the live apps.
+> The guards make the website degrade gracefully instead of taking the apps down, but under
+> sustained load app users will queue behind web users. A separate instance for web traffic is
+> the real fix once the site gets real traffic.
 
 ## License
 
